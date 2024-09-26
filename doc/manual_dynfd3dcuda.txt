@@ -1,0 +1,86 @@
+非平面断层破裂GPU模拟程序dynfd3dcuda使用手册
+张文强 wqzhang1@mail.ustc.edu.cn
+
+程序包内容
+程序包中包括jobs,Makefile,matlab,README,srcd
+其中srcd为源代码文件夹，使用Makefile编译
+matlab文件夹为一些matlab脚本，用于输入、输出数据的处理与绘图
+README中主要是软件包作者信息以及文章引用信息
+Jobs中为运行示例
+
+编译
+笔者使用的运行环境为:
+cuda9.2,cuda10.0或者cuda10.1
+openmpi (gcc-4.8.5,with cuda)
+netcdf 4.4.4
+
+新建bin,obj文件夹，然后使用make编译，生成的程序在bin文件中
+
+运行示例
+文件夹jobs中提供了6个运行示例，分列为滑动弱化准则tpv3，速率弱化准则tpv102(Ageing law)，速率弱化准则tpv104(Slip law)，每个均分为100m和50m两种
+
+以tpv3_free_dh50m文件夹为例：
+文件params.json为程序读取的参数文件，主要参数解释如下:
+TMAX                    模拟总时长
+DT                      时间间隔
+DH                      空间步长
+NX                      x方向格点数目
+PX                      x方向MPI划分数目,必须能被NX整除
+INPORT_GRID_TYPE        输入网格的类型，0为代码里配置，1为用户输入，若为1，则读取Fault_geometry关键字指定的断层数据文件
+INPORT_STRESS_TYPE      输入初始应力的类型，0为代码里配置，1为用户输入，若为1，则读取Fault_init_stress关键字指定的断层数据文件
+Friction_type           摩擦准则类型，0：滑动弱化，1：速率弱化(Ageing)，2：速率弱化(Slip)
+EXPORT_WAVE_SLICE_X     波场W(i0,:,:) 切片
+EXPORT_WAVE_SLICE_Y     波场W(:,j0,:) 切片
+EXPORT_WAVE_SLICE_Z     波场W(:,:,k0) 切片
+Igpu                    指定在编号为igpu的显卡上运行，只在单卡运行时有效
+Fault_grid              断层可破裂区域
+Asp_grid                初始应力凹凸体区域，若为用户输入的初始应力，则无效
+mu_s,mu_d,Dc,C0         滑动弱化摩擦准则的参数
+RS_V0,RS_Vini,RS_f0,RS_fw       速率弱化摩擦准则的参数
+PML_xxx                 PML参数
+Vp1,vs1,rho1            介质参数
+Bi_vp1,bi_vs1,bi_rho1,bi_vp2,bi_vs2,bi_rho2     bimaterial断层(可与vp1,vs1,rho1保持一致使其失效)
+OUT                     数据生成的文件夹，若不存在则需要手动新建：mkdir –p xxx（或脚本新建）
+Smooth_load_T           应力扰动平滑加载的时间，若<=0时则不平滑加载（应力扰动0时刻瞬时加载且保持不变）
+
+运行示例的一般步骤:
+    使用addmypath.m脚本添加matlab脚本到环境中
+    运行conf_fault_grid.m生成params.json文件中Fault_geometry关键字指定的断层坐标数据
+    运行conf_fault_stress.m生成params.json文件中Fault_init_stress关键字指定的断层初始应力数据
+    运行./run.sh提交单卡或者多卡GPU任务
+
+Fault_init_stress数据文件结构:
+为netcdf数据，假设该文件为init_stress.nc，则ncdump –h init_stress.nc的结果为:
+netcdf init_stress {
+dimensions:
+	ny = 800 ;
+	nz = 400 ;
+variables:
+	float x(nz, ny) ;
+	float y(nz, ny) ;
+	float z(nz, ny) ;
+	float Tx(nz, ny) ;
+	float Ty(nz, ny) ;
+	float Tz(nz, ny) ;
+	float dTx(nz, ny) ;
+	float dTy(nz, ny) ;
+	float dTz(nz, ny) ;
+	float mu_s(nz, ny) ;
+	float mu_d(nz, ny) ;
+	float Dc(nz, ny) ;
+	float C0(nz, ny) ;
+	float a(nz, ny) ;
+	float b(nz, ny) ;
+	float L(nz, ny) ;
+	float Vw(nz, ny) ;
+	float State(nz, ny) ;
+}
+其中Tx,Ty,Tz为初始断层牵引力在(x,y,z)坐标系的分量，dTx,dTy,dTz为初始断层牵引力的扰动，即:
+τ_i^0 (t)=τ_i^0+Δτ_i⋅G(t),(i=x,y,z)
+即在G(t)函数控制下平滑地加载平衡态的应力扰动
+加载时长T由params.json中关键字smooth_load_T指定
+
+References
+
+Zhang, Z., Zhang, W., & Chen, X. (2014). Three-dimensional curved grid finite-difference modelling for non-planar rupture dynamics. Geophysical Journal International, 199(2), 860–879. https://doi.org/10.1093/gji/ggu308
+Zhang, W., Zhang, Z., Li, M., & Chen, X. (2020). GPU implementation of curved-grid finite-difference modelling for non-planar rupture dynamics. Geophysical Journal International, 222(3), 2121–2135. https://doi.org/10.1093/gji/ggaa290
